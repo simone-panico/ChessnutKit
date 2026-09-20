@@ -1,6 +1,6 @@
 import ChessnutProtocol
 
-public protocol BoardTransport: Sendable {
+nonisolated public protocol BoardTransport: Sendable {
     var frames: AsyncStream<Frame> { get }
     func connect() async throws
     func disconnect() async
