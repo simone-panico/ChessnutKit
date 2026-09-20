@@ -3,11 +3,16 @@ import CoreBluetooth
 import Foundation
 
 nonisolated public enum ChessnutBLE {
-    /// Notifies with board state and other reports.
+    /// Notifies with board positions.
     nonisolated(unsafe) public static let stateCharacteristic = CBUUID(string: "1B7E8262-2877-41C3-B46E-CF057C562023")
+
+    /// Notifies with replies to commands: version, battery, file count.
+    nonisolated(unsafe) public static let replyCharacteristic = CBUUID(string: "1B7E8273-2877-41C3-B46E-CF057C562023")
 
     /// Accepts commands.
     nonisolated(unsafe) public static let writeCharacteristic = CBUUID(string: "1B7E8272-2877-41C3-B46E-CF057C562023")
+
+    nonisolated(unsafe) static let notifyCharacteristics: Set<CBUUID> = [stateCharacteristic, replyCharacteristic]
 
     /// Advertised names seen on these boards.
     public static let deviceNames = ["Chessnut"]
@@ -25,11 +30,16 @@ nonisolated public final class BLETransport: NSObject, BoardTransport, @unchecke
 
     private var peripheral: CBPeripheral?
     private var writeCharacteristic: CBCharacteristic?
+    private var discoveredNotify: Set<CBUUID> = []
+    private var subscribed: Set<CBUUID> = []
     private var connectContinuation: CheckedContinuation<Void, any Error>?
     private var scanDeadline: DispatchWorkItem?
     private var pendingServices = 0
-    private var isSubscribed = false
     private var isSpent = false
+
+    private var isReady: Bool {
+        writeCharacteristic != nil && subscribed == ChessnutBLE.notifyCharacteristics
+    }
 
     public init(
         scanTimeout: Duration = .seconds(10),
@@ -55,7 +65,7 @@ nonisolated public final class BLETransport: NSObject, BoardTransport, @unchecke
                     continuation.resume(throwing: BoardError.disconnected)
                     return
                 }
-                if self.writeCharacteristic != nil, self.isSubscribed {
+                if self.isReady {
                     continuation.resume()
                     return
                 }
@@ -146,13 +156,14 @@ nonisolated public final class BLETransport: NSObject, BoardTransport, @unchecke
     }
 
     private func completeIfUsable() {
-        guard writeCharacteristic != nil, isSubscribed else {
-            if pendingServices == 0 {
-                finishConnect(throwing: BoardError.boardNotFound)
-            }
+        if isReady {
+            finishConnect()
             return
         }
-        finishConnect()
+        if pendingServices == 0,
+           writeCharacteristic == nil || discoveredNotify != ChessnutBLE.notifyCharacteristics {
+            finishConnect(throwing: BoardError.boardNotFound)
+        }
     }
 
     private func teardown(failingWith error: any Error) {
@@ -165,7 +176,8 @@ nonisolated public final class BLETransport: NSObject, BoardTransport, @unchecke
         }
         peripheral = nil
         writeCharacteristic = nil
-        isSubscribed = false
+        discoveredNotify = []
+        subscribed = []
         finishConnect(throwing: error)
         framesContinuation.finish()
     }
@@ -253,13 +265,11 @@ nonisolated extension BLETransport: CBPeripheralDelegate {
         for characteristic in service.characteristics ?? [] {
             onDiscovery?(service.uuid, characteristic.uuid, characteristic.properties)
 
-            switch characteristic.uuid {
-            case ChessnutBLE.writeCharacteristic:
+            if characteristic.uuid == ChessnutBLE.writeCharacteristic {
                 writeCharacteristic = characteristic
-            case ChessnutBLE.stateCharacteristic:
+            } else if ChessnutBLE.notifyCharacteristics.contains(characteristic.uuid) {
+                discoveredNotify.insert(characteristic.uuid)
                 peripheral.setNotifyValue(true, for: characteristic)
-            default:
-                break
             }
         }
         completeIfUsable()
@@ -270,8 +280,16 @@ nonisolated extension BLETransport: CBPeripheralDelegate {
         didUpdateNotificationStateFor characteristic: CBCharacteristic,
         error: (any Error)?
     ) {
-        guard characteristic.uuid == ChessnutBLE.stateCharacteristic else { return }
-        isSubscribed = error == nil && characteristic.isNotifying
+        guard ChessnutBLE.notifyCharacteristics.contains(characteristic.uuid) else { return }
+        if let error {
+            finishConnect(throwing: error)
+            return
+        }
+        if characteristic.isNotifying {
+            subscribed.insert(characteristic.uuid)
+        } else {
+            subscribed.remove(characteristic.uuid)
+        }
         completeIfUsable()
     }
 
@@ -281,7 +299,6 @@ nonisolated extension BLETransport: CBPeripheralDelegate {
         error: (any Error)?
     ) {
         guard
-
             let data = characteristic.value,
             let frame = Frame(decoding: data)
         else { return }
