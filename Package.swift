@@ -4,20 +4,13 @@ import PackageDescription
 
 let package = Package(
     name: "ChessnutKit",
-    platforms: [.iOS(.v26)],
+    platforms: [.iOS(.v26), .macOS(.v26)],
     products: [
-        .library(
-            name: "ChessnutKit",
-            targets: ["ChessnutKit"]
-        ),
+        .library(name: "ChessnutProtocol", targets: ["ChessnutProtocol"]),
+        .library(name: "ChessnutKit", targets: ["ChessnutKit"]),
     ],
     targets: [
-        .target(
-            name: "ChessnutKit",
-            swiftSettings: [
-                .enableUpcomingFeature("ApproachableConcurrency"),
-            ],
-        ),
-
+        .target(name: "ChessnutProtocol"),
+        .target(name: "ChessnutKit", dependencies: ["ChessnutProtocol"]),
     ]
 )
