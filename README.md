@@ -58,3 +58,11 @@ protocol BoardTransport: Sendable {
 ## Bluetooth permission
 
 Apps using `BLETransport` need `NSBluetoothAlwaysUsageDescription` in their `Info.plist`. Command line tools on macOS are prompted for Bluetooth access on first run.
+
+## AI coding assistants
+
+The package ships a skill for Claude Code and other agents that read `SKILL.md` files. It lives in `skills/chessnutkit` and covers the connection lifecycle, turning positions into moves, LEDs, SwiftUI integration and testing with a fake transport. Copy the folder from a checkout of this repository into your app's `.claude/skills/` directory to activate it:
+
+```bash
+cp -R ChessnutKit/skills/chessnutkit .claude/skills/chessnutkit
+```
