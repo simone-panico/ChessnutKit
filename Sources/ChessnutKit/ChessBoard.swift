@@ -62,6 +62,7 @@ public actor ChessBoard {
         pump = nil
         isConnected = false
         failPending(with: BoardError.disconnected)
+        positionsContinuation.finish()
         await transport.disconnect()
     }
 
@@ -171,6 +172,7 @@ public actor ChessBoard {
     private func transportDidFinish() {
         isConnected = false
         failPending(with: BoardError.disconnected)
+        positionsContinuation.finish()
     }
 
     private func deliver(_ event: Event, matching expectation: Expectation) {

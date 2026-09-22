@@ -1,4 +1,5 @@
 import ChessnutProtocol
+import Foundation
 
 public enum BoardError: Error, Equatable {
     /// Bluetooth is off, unauthorised, or unsupported on this device.
@@ -31,4 +32,8 @@ extension BoardError: CustomStringConvertible {
         case .disconnected: "The chessboard disconnected"
         }
     }
+}
+
+extension BoardError: LocalizedError {
+    public var errorDescription: String? { description }
 }

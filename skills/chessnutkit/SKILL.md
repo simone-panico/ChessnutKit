@@ -84,19 +84,19 @@ Rules that follow from how the SDK is built:
 - **A `BLETransport` is single use.** After `disconnect()` or a dropped link it refuses to
   connect again. To reconnect, create a new `BLETransport` and a new `ChessBoard`, then
   restart your positions reader on the new board.
-- **`positions` does not end on disconnect.** It finishes only when the `ChessBoard` is
-  deallocated. You learn that the link dropped when a command or query throws
-  `BoardError.disconnected` or `.notConnected`. Call `battery()` periodically if you need a
-  heartbeat.
+- **`positions` ends when the link ends.** The stream finishes after `disconnect()` and when
+  the board drops the connection, so a `for await` over it doubles as the disconnect signal.
+  Commands and queries issued after that throw `BoardError.disconnected` or `.notConnected`.
 - **Queries run one at a time** with a 2 s timeout (`requestTimeout` in the initializer).
   `battery()`, `version(_:)` and `storedGameCount()` throw `.timedOut` if the board stays
   silent. `beep`, `setLEDs` and `setMode` are fire and forget and never wait for a reply.
 - **`lastPosition` and `lastBattery` are actor properties.** Read them with `await`.
 
 Errors to expect: `connect()` throws `bluetoothUnavailable` when Bluetooth is off or denied,
-`boardNotFound` after the scan timeout or when the expected characteristics are missing, and
-can surface raw CoreBluetooth errors. `BoardError` is `CustomStringConvertible`, so
-`"\(error)"` gives a user readable message.
+`boardNotFound` after the scan timeout or when the expected characteristics are missing,
+`CancellationError` when the calling task is cancelled during the scan, and can surface raw
+CoreBluetooth errors. `BoardError` is a `LocalizedError`, so `error.localizedDescription`
+gives a user readable message for SDK and CoreBluetooth errors alike.
 
 ## Turning positions into moves
 
@@ -150,6 +150,7 @@ manual hopping. One task reads positions for the object's lifetime.
 
 ```swift
 import ChessnutKit
+import Foundation
 import Observation
 
 @MainActor
@@ -170,7 +171,7 @@ final class BoardSession {
             try await board.connect()
             battery = try await board.battery()
         } catch {
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
             return
         }
         reader = Task {
@@ -191,7 +192,7 @@ final class BoardSession {
         do {
             try await board?.setLEDs(squares)
         } catch {
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 }

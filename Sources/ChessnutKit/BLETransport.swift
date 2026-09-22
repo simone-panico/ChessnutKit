@@ -59,23 +59,27 @@ nonisolated public final class BLETransport: NSObject, BoardTransport, @unchecke
     // MARK: BoardTransport
 
     public func connect() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            queue.async {
-                if self.isSpent {
-                    continuation.resume(throwing: BoardError.disconnected)
-                    return
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                queue.async {
+                    if self.isSpent {
+                        continuation.resume(throwing: BoardError.disconnected)
+                        return
+                    }
+                    if self.isReady {
+                        continuation.resume()
+                        return
+                    }
+                    guard self.connectContinuation == nil else {
+                        continuation.resume(throwing: BoardError.notConnected)
+                        return
+                    }
+                    self.connectContinuation = continuation
+                    self.startIfReady()
                 }
-                if self.isReady {
-                    continuation.resume()
-                    return
-                }
-                guard self.connectContinuation == nil else {
-                    continuation.resume(throwing: BoardError.notConnected)
-                    return
-                }
-                self.connectContinuation = continuation
-                self.startIfReady()
             }
+        } onCancel: {
+            queue.async { self.teardown(failingWith: CancellationError()) }
         }
     }
 

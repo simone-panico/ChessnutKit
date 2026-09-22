@@ -9,7 +9,7 @@ Everything public in both modules. `import ChessnutKit` re-exports `ChessnutProt
 ```swift
 init(transport: any BoardTransport, requestTimeout: Duration = .seconds(2))
 
-nonisolated let positions: AsyncStream<Position>   // bufferingNewest(1), single consumer
+nonisolated let positions: AsyncStream<Position>   // bufferingNewest(1), single consumer, ends when the link ends
 
 func connect(mode: Mode? = .realTime) async throws  // no-op if already connected
 func disconnect() async
@@ -38,7 +38,7 @@ init(
     onDiscovery: (@Sendable (CBUUID, CBUUID, CBCharacteristicProperties) -> Void)? = nil
 )
 let frames: AsyncStream<Frame>
-func connect() async throws
+func connect() async throws                        // cancelling the task stops the scan and throws CancellationError
 func disconnect() async
 func send(_ frame: Frame) async throws
 ```
@@ -67,7 +67,7 @@ func send(_ frame: Frame) async throws
 func send(_ command: Command) async throws
 ```
 
-### `enum BoardError: Error, Equatable, CustomStringConvertible`
+### `enum BoardError: Error, Equatable, CustomStringConvertible, LocalizedError`
 
 ```swift
 case bluetoothUnavailable   // Bluetooth off, unauthorized or unsupported
